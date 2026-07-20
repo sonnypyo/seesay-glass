@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8">
+    <!-- Meta Ray-Ban Display / MRBD 웹앱 규격: 고정 600x600, 스크롤 금지, 확대 금지 -->
+    <meta name="viewport" content="width=600, height=600, initial-scale=1.0, user-scalable=no">
+    <meta name="description" content="SeeSay live captions for deaf and hard-of-hearing users on Meta Ray-Ban Display glasses.">
+    <!-- MRBD 호환 웹앱 선언 (디스커버리 표면·호환성 안내용) -->
+    <meta name="mrbd-web-app-capable" content="yes">
+    <title>SeeSay Glass Caption</title>
+    <style>
+      /* MRBD 는 additive 디스플레이라 어두운 배경 + 밝은 고대비 글씨가 필수다.
+         색상은 rgb/이름 색으로만 둔다 (표준 토큰과 별개인 standalone 웹앱). */
+      :root {
+        color-scheme: dark;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        --bg: rgb(0, 0, 0);
+        --surface: rgb(18, 24, 38);
+        --text: rgb(255, 255, 255);
+        --text-muted: rgb(190, 200, 215);
+        --border: rgb(90, 105, 130);
+        --font-title: 30px;
+        --font-body: 26px;
+        --font-caption: 16px;
+        --space-2: 8px;
+        --space-3: 14px;
+        --space-4: 22px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        width: 600px;
+        height: 600px;
+      }
+
+      body {
+        margin: 0;
+        overflow: hidden; /* MRBD: 600x600 밖으로 넘치거나 스크롤되면 안 된다 */
+        background: var(--bg);
+        color: var(--text);
+      }
+
+      .glass-surface {
+        width: 600px;
+        height: 600px;
+        display: grid;
+        grid-template-rows: 1fr auto;
+        gap: var(--space-3);
+        padding: var(--space-4);
+      }
+
+      .caption-lines {
+        display: grid;
+        align-content: center;
+        gap: var(--space-3);
+        min-height: 72px;
+      }
+
+      .caption-line {
+        min-height: 32px;
+        padding: var(--space-2) var(--space-3);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        background: var(--surface);
+        color: var(--text);
+        font-size: var(--font-body);
+        line-height: 1.3;
+        overflow-wrap: anywhere;
+      }
+
+      .caption-line:empty {
+        border-color: transparent;
+        background: transparent;
+      }
+
+      .status-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-2);
+        min-height: 28px;
+        color: var(--text-muted);
+        font-size: var(--font-caption);
+      }
+
+      .name-call {
+        display: none;
+        position: fixed;
+        inset: 0;
+        padding: var(--space-4);
+        background: var(--alert-call);
+        color: rgb(20, 20, 20);
+        place-items: center;
+        text-align: center;
+      }
+
+      .name-call[data-visible="true"] {
+        display: grid;
+      }
+
+      .name-call strong {
+        display: block;
+        font-size: var(--font-title);
+        line-height: 1.15;
+      }
+
+      .name-call span {
+        display: block;
+        margin-top: var(--space-2);
+        font-size: var(--font-body);
+        line-height: 1.3;
+        overflow-wrap: anywhere;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="glass-surface" aria-live="polite">
+      <section class="caption-lines" aria-label="최근 자막 두 줄">
+        <div class="caption-line" data-caption-line="0"></div>
+        <div class="caption-line" data-caption-line="1"></div>
+      </section>
+      <section class="status-row" aria-label="연결 상태">
+        <span data-status-label>대기 중</span>
+        <span data-status-meta>caption x 2</span>
+      </section>
+    </main>
+    <section class="name-call" data-name-call aria-live="assertive" aria-label="호명 알림">
+      <div>
+        <strong data-name-call-title>호명</strong>
+        <span data-name-call-body></span>
+      </div>
+    </section>
+    <script>
+      const captions = [];
+      const lines = Array.from(document.querySelectorAll('[data-caption-line]'));
+      const statusLabel = document.querySelector('[data-status-label]');
+      const statusMeta = document.querySelector('[data-status-meta]');
+      const nameCall = document.querySelector('[data-name-call]');
+      const nameCallTitle = document.querySelector('[data-name-call-title]');
+      const nameCallBody = document.querySelector('[data-name-call-body]');
+      let nameCallTimer = null;
+
+      function captionLine(event) {
+        const speaker = event.speaker || '화자';
+        return `${speaker}: ${event.text}`;
+      }
+
+      function renderCaptions() {
+        const visible = captions.slice(-2);
+        lines.forEach((line, index) => {
+          line.textContent = visible[index] || '';
+        });
+        statusLabel.textContent = visible.length > 0 ? '자막 수신 중' : '대기 중';
+      }
+
+      function showNameCall(event) {
+        nameCallTitle.textContent = event.alias || '호명';
+        nameCallBody.textContent = event.text || '';
+        nameCall.dataset.visible = 'true';
+        if (nameCallTimer) {
+          window.clearTimeout(nameCallTimer);
+        }
+        nameCallTimer = window.setTimeout(() => {
+          nameCall.dataset.visible = 'false';
+        }, 5000);
+      }
+
+      function updateStatus(event) {
+        if (event.type === 'ambient_status') {
+          statusLabel.textContent = event.state === 'speech' ? '발화 감지 중' : '대기 중';
+          statusMeta.textContent = `${event.transport} · rms ${Number(event.rms || 0).toFixed(2)}`;
+        }
+        if (event.type === 'device_joined') {
+          statusLabel.textContent = event.role === 'mic' ? '마이크 연결됨' : '뷰어 연결됨';
+          statusMeta.textContent = event.device_name || '';
+        }
+        if (event.type === 'mic_transferred') {
+          statusLabel.textContent = '마이크 전환';
+          statusMeta.textContent = event.to_device || '';
+        }
+      }
+
+      function handleEvent(event) {
+        if (!event || typeof event.type !== 'string') {
+          return;
+        }
+        if (event.type === 'caption' && typeof event.text === 'string' && event.text.length > 0) {
+          captions.push(captionLine(event));
+          if (captions.length > 8) {
+            captions.shift();
+          }
+          renderCaptions();
+        } else if (event.type === 'name_call') {
+          showNameCall(event);
+        } else {
+          updateStatus(event);
+        }
+      }
+
+      window.glassCaptionPush = handleEvent;
+
+      // MRBD 는 HTTPS 로 로드되므로 실시간 자막은 wss:// 로 받는다.
+      // 예: ?ws=wss://seesay.store/ws
+      const wsUrl = new URL(window.location.href).searchParams.get('ws');
+      if (wsUrl) {
+        const socket = new WebSocket(wsUrl);
+        socket.addEventListener('message', (message) => {
+          try {
+            handleEvent(JSON.parse(message.data));
+          } catch {
+            statusLabel.textContent = '메시지 오류';
+          }
+        });
+        socket.addEventListener('close', () => {
+          statusLabel.textContent = '연결 끊김';
+        });
+      }
+    </script>
+  </body>
+</html>
