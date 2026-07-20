@@ -10,7 +10,7 @@
     <title>SeeSay Glass Caption</title>
     <style>
       /* MRBD 는 additive 디스플레이라 어두운 배경 + 밝은 고대비 글씨가 필수다.
-         색상은 rgb/이름 색으로만 둔다 (표준 토큰과 별개인 standalone 웹앱). */
+         색상은 rgb/hsl/이름 색으로만 둔다 (표준 토큰과 별개인 standalone 웹앱). */
       :root {
         color-scheme: dark;
         font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -19,6 +19,7 @@
         --text: rgb(255, 255, 255);
         --text-muted: rgb(190, 200, 215);
         --border: rgb(90, 105, 130);
+        --keyword: rgb(250, 204, 21);
         --font-title: 30px;
         --font-body: 26px;
         --font-caption: 16px;
@@ -64,6 +65,7 @@
         min-height: 32px;
         padding: var(--space-2) var(--space-3);
         border: 1px solid var(--border);
+        border-left: 6px solid var(--border); /* 화자 색 막대 */
         border-radius: 12px;
         background: var(--surface);
         color: var(--text);
@@ -77,6 +79,17 @@
         background: transparent;
       }
 
+      /* 화자 이름 — 화자별 색으로 구분한다 (색은 JS 가 인라인으로 지정) */
+      .caption-line .spk {
+        font-weight: 700;
+      }
+
+      /* 강조(특정) 단어 하이라이트 */
+      .caption-line .kw {
+        color: var(--keyword);
+        font-weight: 700;
+      }
+
       .status-row {
         display: flex;
         align-items: center;
@@ -87,6 +100,26 @@
         font-size: var(--font-caption);
       }
 
+      /* 특정 단어 알림 — 상단에 잠깐 뜨는 띠 */
+      .keyword-alert {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        padding: var(--space-2) var(--space-3);
+        background: rgb(60, 48, 8);
+        color: var(--keyword);
+        font-size: var(--font-caption);
+        font-weight: 700;
+        text-align: center;
+      }
+
+      .keyword-alert[data-visible="true"] {
+        display: block;
+      }
+
+      /* 호명 알림 — 전체 화면 (호명 강조 색 토큰 유지) */
       .name-call {
         display: none;
         position: fixed;
@@ -128,6 +161,7 @@
         <span data-status-meta>caption x 2</span>
       </section>
     </main>
+    <div class="keyword-alert" data-keyword-alert aria-live="assertive"></div>
     <section class="name-call" data-name-call aria-live="assertive" aria-label="호명 알림">
       <div>
         <strong data-name-call-title>호명</strong>
@@ -142,19 +176,78 @@
       const nameCall = document.querySelector('[data-name-call]');
       const nameCallTitle = document.querySelector('[data-name-call-title]');
       const nameCallBody = document.querySelector('[data-name-call-body]');
+      const keywordAlert = document.querySelector('[data-keyword-alert]');
       let nameCallTimer = null;
+      let keywordTimer = null;
 
-      function captionLine(event) {
-        const speaker = event.speaker || '화자';
-        return `${speaker}: ${event.text}`;
+      const params = new URL(window.location.href).searchParams;
+      // 강조할 특정 단어들. 예: ?keywords=예산,마감일
+      const keywords = (params.get('keywords') || '')
+        .split(',')
+        .map((word) => word.trim())
+        .filter(Boolean);
+
+      function escapeHtml(value) {
+        return String(value).replace(/[&<>"]/g, (ch) => (
+          { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]
+        ));
+      }
+
+      // 화자 이름 → 항상 같은 색 (화자 구분). 어두운 배경에서 잘 보이게 밝은 hsl.
+      function speakerColor(name) {
+        if (!name) {
+          return 'rgb(190, 200, 215)';
+        }
+        let hue = 0;
+        for (let i = 0; i < name.length; i += 1) {
+          hue = (hue * 31 + name.charCodeAt(i)) % 360;
+        }
+        return `hsl(${hue}, 70%, 68%)`;
+      }
+
+      function findKeywords(text) {
+        return keywords.filter((word) => text.includes(word));
+      }
+
+      // 자막 본문에서 특정 단어를 하이라이트로 감싼다 (이미 escape 된 문자열 대상).
+      function highlightKeywords(escapedText) {
+        let out = escapedText;
+        keywords.forEach((word) => {
+          const safe = escapeHtml(word);
+          if (safe) {
+            out = out.split(safe).join(`<span class="kw">${safe}</span>`);
+          }
+        });
+        return out;
       }
 
       function renderCaptions() {
         const visible = captions.slice(-2);
         lines.forEach((line, index) => {
-          line.textContent = visible[index] || '';
+          const item = visible[index];
+          if (!item) {
+            line.innerHTML = '';
+            line.style.borderLeftColor = 'transparent';
+            return;
+          }
+          const color = speakerColor(item.speaker);
+          line.style.borderLeftColor = color;
+          const speaker = item.speaker || '화자';
+          const body = highlightKeywords(escapeHtml(item.text));
+          line.innerHTML = `<span class="spk" style="color:${color}">${escapeHtml(speaker)}</span> ${body}`;
         });
         statusLabel.textContent = visible.length > 0 ? '자막 수신 중' : '대기 중';
+      }
+
+      function showKeywordAlert(words) {
+        keywordAlert.textContent = `⭐ 강조 단어: ${words.join(', ')}`;
+        keywordAlert.dataset.visible = 'true';
+        if (keywordTimer) {
+          window.clearTimeout(keywordTimer);
+        }
+        keywordTimer = window.setTimeout(() => {
+          keywordAlert.dataset.visible = 'false';
+        }, 4000);
       }
 
       function showNameCall(event) {
@@ -189,10 +282,22 @@
           return;
         }
         if (event.type === 'caption' && typeof event.text === 'string' && event.text.length > 0) {
-          captions.push(captionLine(event));
+          captions.push({ speaker: event.speaker || null, text: event.text });
           if (captions.length > 8) {
             captions.shift();
           }
+          renderCaptions();
+          const hits = findKeywords(event.text);
+          if (hits.length > 0) {
+            showKeywordAlert(hits);
+          }
+        } else if (event.type === 'speaker_named') {
+          // 이름 붙이기: 화면에 남은 화자N 라벨을 확정된 이름으로 바꾼다.
+          captions.forEach((item) => {
+            if (item.speaker === event.old_label) {
+              item.speaker = event.speaker;
+            }
+          });
           renderCaptions();
         } else if (event.type === 'name_call') {
           showNameCall(event);
@@ -204,8 +309,8 @@
       window.glassCaptionPush = handleEvent;
 
       // MRBD 는 HTTPS 로 로드되므로 실시간 자막은 wss:// 로 받는다.
-      // 예: ?ws=wss://seesay.store/ws
-      const wsUrl = new URL(window.location.href).searchParams.get('ws');
+      // 예: ?ws=wss://seesay.store/ws&keywords=예산,마감일
+      const wsUrl = params.get('ws');
       if (wsUrl) {
         const socket = new WebSocket(wsUrl);
         socket.addEventListener('message', (message) => {
