@@ -20,6 +20,7 @@
         --text-muted: rgb(190, 200, 215);
         --border: rgb(90, 105, 130);
         --keyword: rgb(250, 204, 21);
+        --alert-call: rgb(250, 204, 21); /* 호명 강조 — 글래스에서 빛을 내야 보인다 */
         --font-title: 30px;
         --font-body: 26px;
         --font-caption: 16px;
@@ -137,11 +138,26 @@
 
       .name-call[data-visible="true"] {
         display: grid;
+        /* 진동을 쓸 수 없으므로(SDK 미지원) 시각 자극을 강하게 준다.
+           주변시(peripheral vision)에서도 알아채도록 몇 번 점멸시킨다. */
+        animation: name-call-pulse 0.6s ease-in-out 4;
+      }
+
+      @keyframes name-call-pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.55; }
+      }
+
+      /* 움직임에 민감한 사용자는 점멸을 끈다 */
+      @media (prefers-reduced-motion: reduce) {
+        .name-call[data-visible="true"] {
+          animation: none;
+        }
       }
 
       .name-call strong {
         display: block;
-        font-size: var(--font-title);
+        font-size: 36px;
         line-height: 1.15;
       }
 
@@ -257,8 +273,8 @@
       function showNameCall(event) {
         // 소리 방향은 알 수 없으므로(이슈 0010) "누가 불렀는지"를 크게 보여준다.
         nameCallTitle.textContent = event.speaker
-          ? `${event.speaker}님이 부릅니다`
-          : (event.alias || '호명');
+          ? `📣 ${event.speaker}님이 부릅니다`
+          : `📣 ${event.alias || '호명'}`;
         nameCallBody.textContent = event.text || '';
         nameCall.dataset.visible = 'true';
         if (nameCallTimer) {
