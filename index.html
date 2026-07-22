@@ -26,6 +26,7 @@
         --space-2: 8px;
         --space-3: 14px;
         --space-4: 22px;
+        --safe: 8px; /* MRBD 안전 여백 (가장자리 잘림 방지) */
       }
 
       * {
@@ -100,14 +101,16 @@
         font-size: var(--font-caption);
       }
 
-      /* 특정 단어 알림 — 상단에 잠깐 뜨는 띠 */
+      /* 특정 단어 알림 — 상단에 잠깐 뜨는 띠.
+         MRBD 안전 여백(8dp): 화면 끝에 붙이면 rubberbanding 으로 잘린다. */
       .keyword-alert {
         display: none;
         position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
+        top: var(--safe);
+        left: var(--safe);
+        right: var(--safe);
         padding: var(--space-2) var(--space-3);
+        border-radius: 12px;
         background: rgb(60, 48, 8);
         color: var(--keyword);
         font-size: var(--font-caption);
@@ -123,7 +126,8 @@
       .name-call {
         display: none;
         position: fixed;
-        inset: 0;
+        inset: var(--safe);
+        border-radius: 24px;
         padding: var(--space-4);
         background: var(--alert-call);
         color: rgb(20, 20, 20);
