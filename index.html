@@ -120,7 +120,22 @@
       }
 
       .keyword-alert[data-visible="true"] {
-        display: block;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: var(--space-2);
+      }
+
+      .alert-icon {
+        width: 18px;
+        height: 18px;
+        flex: none;
+      }
+
+      .name-call-icon {
+        width: 44px;
+        height: 44px;
+        margin-bottom: var(--space-2);
       }
 
       /* 호명 알림 — 전체 화면 (호명 강조 색 토큰 유지) */
@@ -181,9 +196,13 @@
         <span data-status-meta>caption x 2</span>
       </section>
     </main>
-    <div class="keyword-alert" data-keyword-alert aria-live="assertive"></div>
+    <div class="keyword-alert" data-keyword-alert aria-live="assertive">
+      <svg class="alert-icon" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1" aria-hidden="true"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+      <span data-keyword-alert-text></span>
+    </div>
     <section class="name-call" data-name-call aria-live="assertive" aria-label="호명 알림">
       <div>
+        <svg class="name-call-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>
         <strong data-name-call-title>호명</strong>
         <span data-name-call-body></span>
       </div>
@@ -197,6 +216,7 @@
       const nameCallTitle = document.querySelector('[data-name-call-title]');
       const nameCallBody = document.querySelector('[data-name-call-body]');
       const keywordAlert = document.querySelector('[data-keyword-alert]');
+      const keywordAlertText = document.querySelector('[data-keyword-alert-text]');
       let nameCallTimer = null;
       let keywordTimer = null;
 
@@ -260,7 +280,7 @@
       }
 
       function showKeywordAlert(words) {
-        keywordAlert.textContent = `⭐ 강조 단어: ${words.join(', ')}`;
+        keywordAlertText.textContent = `강조 단어: ${words.join(', ')}`;
         keywordAlert.dataset.visible = 'true';
         if (keywordTimer) {
           window.clearTimeout(keywordTimer);
@@ -273,8 +293,8 @@
       function showNameCall(event) {
         // 소리 방향은 알 수 없으므로(이슈 0010) "누가 불렀는지"를 크게 보여준다.
         nameCallTitle.textContent = event.speaker
-          ? `📣 ${event.speaker}님이 부릅니다`
-          : `📣 ${event.alias || '호명'}`;
+          ? `${event.speaker}님이 부릅니다`
+          : (event.alias || '호명');
         nameCallBody.textContent = event.text || '';
         nameCall.dataset.visible = 'true';
         if (nameCallTimer) {
